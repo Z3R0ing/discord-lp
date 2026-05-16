@@ -1,17 +1,31 @@
-FROM gradle:8.7-jdk21-alpine AS builder
-
-WORKDIR /build
-
-COPY . .
-
-RUN gradle clean bootJar --no-daemon
-
-FROM eclipse-temurin:21-jre-alpine
+# Build stage
+FROM eclipse-temurin:21-jdk AS builder
 
 WORKDIR /app
 
-COPY --from=builder /build/build/libs/*.jar app.jar
+COPY gradlew .
+COPY gradle gradle
+COPY build.gradle .
+COPY settings.gradle .
+
+RUN chmod +x gradlew
+
+# download dependencies
+RUN ./gradlew dependencies --no-daemon || true
+
+COPY src src
+
+RUN ./gradlew bootJar --no-daemon
+
+# Runtime stage
+FROM eclipse-temurin:21-jre
+
+WORKDIR /app
+
+COPY --from=builder /app/build/libs/*.jar app.jar
+
+ENV JAVA_OPTS=""
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
